@@ -1,31 +1,50 @@
-﻿#include <vector>
+#define _CRT_SECURE_NO_WARNINGS
+#include <vector>
 #include <thread>
 #include <iostream>
+#include <mutex>
+#include <cstdlib>
+#include <ctime>
+#include <iomanip>
+#include <chrono>
 
 using namespace std;
-
+mutex mtx;
 //19 вариант
 
 class Bear {
 public:
 	Bear() {}
 
+	string Time()
+	{
+		time_t seconds = time(NULL);
+		tm* tInfo = localtime(&seconds);
+		return asctime(tInfo);
+	}
 	/*
 	отправляет Винни-пуха опустошать улей,
 	если пчел было меньше 3 забирает весь мед,
 	иначе Винни-пух уходит ни с чем
 	*/
 	void devastate(int& content, int& beesIn) {
+		string time;
 		if (beesIn < 3 && content > 14) {
+			mtx.lock();
 			cout << "bees in: " << beesIn << endl;
-			cout << "Vinni-puh devastated hive" << endl;
+			time = Time(); 
+			cout << time.substr(0, time.size() - 1) << "Vinni-puh devastated hive" << endl;
 			cout << "Honey in hive: 0" << endl;
+			mtx.unlock();
 			content = 0;
 		}
 		else if (content > 14) {
+			mtx.lock();
 			cout << "bees in: " << beesIn << endl;
-			cout << "Vinni-puh was bitten by bees" << endl;
+			time = Time(); 
+			cout << time.substr(0, time.size() - 1) << "Vinni-puh was bitten by bees" << endl;
 			cout << "Honey in hive: " << content << endl;
+			mtx.unlock();
 		}
 
 	}
@@ -40,13 +59,24 @@ public:
 		this->beesQuant = BeesQuant;
 	}
 
+	string Time()
+	{
+		time_t seconds = time(NULL);
+		tm* tInfo = localtime(&seconds);
+		return asctime(tInfo);
+	}
 	/*
 	метод отвечающий за вылет пчелы
 	не выпускает пчелу, если она единственная в улии или количество меда достигло максимума
 	если пчела вылетела, ее поток засыпает (время добычи меда)
 	*/
-	void goOut(int& content, int& beesIn) {
+	void goOut(int& content, int& beesIn, int id) {
+		string time;
 		if (content + (beesQuant - beesIn) < 30 && beesIn > 1) {
+			mtx.lock();
+			time = Time(); 
+			cout << time.substr(0, time.size() - 1) << " bee № " << id << " flew out" << endl;
+			mtx.unlock();
 			beesIn -= 1;
 			int a = rand() % 4 + 1;
 			if (a == 1)
@@ -57,6 +87,10 @@ public:
 				this_thread::sleep_for(3s);
 			if (a == 4)
 				this_thread::sleep_for(4s);
+			mtx.lock();
+			time = Time();
+			cout << time.substr(0, time.size() - 1) << " bee № " << id << " came back" << endl;
+			mtx.unlock();
 			content += 1;
 			if (content > 30)
 				content = 30;
@@ -68,17 +102,31 @@ public:
 	}
 };
 
+string Time()
+{
+    time_t seconds = time(NULL);
+    tm* tInfo = localtime(&seconds);
+    return asctime(tInfo);
+}
+
 /*
 ждет, пока Винни-пух проснется и улей заполнится хотя бы на половину и отправляет медведя опустошать улей
 */
 void StartBear(Bear bear, int& content, int& beesIn) {
-	cout << "Vinni-puh sleeps" << endl;
+	string time;
+	mtx.lock();
+	time = Time();
+	cout << time.substr(0, time.size() - 1)  << " Vinni-puh sleeps" << endl;
+	mtx.unlock();
 	while (true) {
 		while (content < 15) {
 			this_thread::sleep_for(1s);
 		}
 		bear.devastate(content, beesIn);
-		cout << "Vinni-puh sleeps" << endl;
+		mtx.lock();
+		time = Time();
+		cout << time.substr(0, time.size() - 1) << " Vinni-puh sleeps" << endl;
+		mtx.unlock();
 		int a = rand() % 4 + 3;
 		if (a == 3)
 			this_thread::sleep_for(3s);
@@ -94,9 +142,9 @@ void StartBear(Bear bear, int& content, int& beesIn) {
 /*
 вызывает метод, проверяющий возможность пчелы вылететь и отправдяющий ее, если возможно
 */
-void StartBee(Bee bee, int& content, int& beesIn) {
+void StartBee(Bee bee, int& content, int& beesIn, int id) {
 	while (true) {
-		bee.goOut(content, beesIn);
+		bee.goOut(content, beesIn, id);
 	}
 }
 
@@ -117,7 +165,6 @@ void Timer() {
 	exit(0);
 }
 
-
 int main() {
 	int beesQuant; //количество пчел
 	cout << "Enter quantity of bees: ";
@@ -127,7 +174,6 @@ int main() {
 		cout << "Enter quantity of bees: ";
 		cin >> beesQuant;
 	}
-
 	int content = 0; //количество меда в улье
 	int beesIn = beesQuant; //количество пчел в улье
 
@@ -135,7 +181,7 @@ int main() {
 	CreateBees(beesQuant, bees);
 	thread* vec_bees = new thread[beesQuant];
 	for (int i = 0; i < bees.size(); i++) {
-		vec_bees[i] = thread(StartBee, bees[i], ref(content), ref(beesIn));
+		vec_bees[i] = thread(StartBee, bees[i], ref(content), ref(beesIn), i);
 	}
 
 	Bear bear = Bear();
